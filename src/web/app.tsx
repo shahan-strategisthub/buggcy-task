@@ -1,0 +1,268 @@
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import type { FormEvent, ReactNode } from 'react';
+import { ArrowDown, ArrowRight, BarChart3, CalendarDays, ChevronDown, CircleAlert, Clock3, FlaskConical,
+  Gavel, LayoutGrid, Plus, X } from 'lucide-react';
+import { statuses, statusLabels } from '../shared.js';
+import type { Bid, Task, User, Workload } from '../shared.js';
+import { ApiError, send, useResource } from './api.js';
+import { Review } from './review.js';
+
+const Dashboard = lazy(() => import('./dashboard.js').then((module) => ({ default: module.Dashboard })));
+const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
+const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+export function dateLabel(value: string) { return dateFormat.format(new Date(value)); }
+function initials(name: string) { return name.split(' ').slice(0, 2).map((word) => word[0]).join(''); }
+function navigate(hash: string) { window.location.hash = hash; }
+
+function Alert({ children }: { children: ReactNode }) {
+  return <div className="alert" role="alert"><CircleAlert size={17} /> <span>{children}</span></div>;
+}
+
+export function App() {
+  const [hash, setHash] = useState(window.location.hash);
+  const [section, setSection] = useState(window.location.hash);
+  const [selected, setSelected] = useState(() => Number(sessionStorage.getItem('taskbid.user')));
+  const [revision, setRevision] = useState(0);
+  const [live, setLive] = useState(false);
+  const [newTask, setNewTask] = useState(false);
+  const refresh = useCallback(() => setRevision((previous) => previous + 1), []);
+  const users = useResource<User[]>('/users', revision);
+  const user = users?.data?.find(({ id }) => id === selected) ?? users?.data?.[0];
+  const workload = useResource<Workload>(user ? `/users/${user.id}/workload` : null, revision);
+  const taskId = /^#task\/(\d+)$/.exec(hash)?.[1];
+  const page = section === '#dashboard' ? 'dashboard' : section === '#review' ? 'review' : 'board';
+
+  useEffect(() => {
+    const changePage = () => {
+      const location = window.location.hash;
+      setHash(location);
+      if (!location.startsWith('#task/')) setSection(location);
+    };
+    window.addEventListener('hashchange', changePage);
+    return () => window.removeEventListener('hashchange', changePage);
+  }, []);
+
+  useEffect(() => {
+    const events = new EventSource('/api/events');
+    let timer: number | undefined;
+    events.onopen = () => { setLive(true); refresh(); };
+    events.onerror = () => setLive(false);
+    events.onmessage = () => {
+      if (timer !== undefined) return;
+      timer = window.setTimeout(() => { timer = undefined; refresh(); }, 60);
+    };
+    const poll = window.setInterval(refresh, 30_000);
+    return () => { events.close(); window.clearTimeout(timer); window.clearInterval(poll); };
+  }, [refresh]);
+
+  const selectUser = (id: number) => { setSelected(id); sessionStorage.setItem('taskbid.user', String(id)); };
+  return <>
+    <header className="topbar">
+      <div className="topbar-inner">
+        <a className="brand" href="#board"><span className="brand-icon"><Gavel size={20} /></span>TaskBid</a>
+        <nav aria-label="Workspace">
+          <a href="#board" aria-current={page === 'board' ? 'page' : undefined}><LayoutGrid size={17} /> Task board</a>
+          <a href="#dashboard" aria-current={page === 'dashboard' ? 'page' : undefined}><BarChart3 size={17} /> Dashboard</a>
+          <a href="#review" aria-current={page === 'review' ? 'page' : undefined}><FlaskConical size={17} /> Review lab</a>
+        </nav>
+        <div className="header-end">
+          <span className={live ? 'connection live' : 'connection'} title={live ? 'Changes update automatically' : 'Trying to reconnect'}>
+            <span className="signal" />{live ? 'Live' : 'Reconnecting'}
+          </span>
+          <label className="user-select">
+            <span className="avatar" aria-hidden="true">{user ? initials(user.name) : '–'}</span>
+            <select aria-label="Switch demo user" value={user?.id ?? ''} onChange={(event) => selectUser(Number(event.target.value))} disabled={!user}>
+              {!user && <option value="">Loading teammates…</option>}
+              {users?.data?.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}
+            </select>
+            <ChevronDown size={13} className="chevron" aria-hidden="true" />
+          </label>
+        </div>
+      </div>
+    </header>
+    <main className="main">
+      {users?.error && <Alert>{users.error} <button className="text-button" onClick={refresh}>Try again</button></Alert>}
+      {page === 'dashboard' && <Suspense fallback={<p className="muted" role="status">Loading dashboard…</p>}><Dashboard revision={revision} /></Suspense>}
+      {page === 'review' && <Review user={user} revision={revision} refresh={refresh} />}
+      {page === 'board' && <Board revision={revision} workload={workload?.data} user={user} onCreate={() => setNewTask(true)} />}
+    </main>
+    {taskId && <TaskDetail key={`${taskId}/${user?.id}`} id={taskId} user={user} workload={workload?.data}
+      revision={revision} refresh={refresh} close={() => navigate(`#${page}`)} />}
+    {newTask && user && <CreateTask user={user} close={() => setNewTask(false)} created={(task) => {
+      setNewTask(false); refresh(); navigate(`#task/${task.id}`);
+    }} />}
+  </>;
+}
+
+function Board({ revision, workload, user, onCreate }: {
+  revision: number; workload?: Workload; user?: User; onCreate: () => void;
+}) {
+  const tasks = useResource<Task[]>('/tasks', revision);
+  return <>
+    <div className="page-heading">
+      <div><h1>Task board</h1><p>Post work, compare bids, and track tasks through delivery.</p></div>
+      <div className="heading-actions">
+        {workload && <div className="capacity"><Clock3 size={17} /><div><strong>{workload.remaining} h available</strong><small>{workload.workload} of {workload.max_capacity} h allocated</small></div></div>}
+        <button className="button primary" onClick={onCreate} disabled={!user}><Plus size={18} /> New task</button>
+      </div>
+    </div>
+    {tasks?.error && <Alert>{tasks.error}</Alert>}
+    <div className="board-scroll" role="region" aria-label="Task board columns" tabIndex={0}>
+      <div className="board">
+        {statuses.map((status) => {
+          const group = tasks?.data?.filter((task) => task.status === status) ?? [];
+          return <section className="lane" key={status} aria-label={statusLabels[status]}>
+            <header className="lane-heading"><span className={`state-dot ${status}`} /><h2>{statusLabels[status]}</h2><span className="count">{group.length}</span></header>
+            <div className="lane-body">
+              {group.map((task) => <a className="task-card" key={task.id} href={`#task/${task.id}`}>
+                <h3>{task.title}</h3>
+                <span className="complexity">Complexity {task.complexity}/5</span>
+                <span className={`deadline ${task.status !== 'done' && Date.parse(task.deadline) < Date.now() ? 'late' : ''}`}>
+                  <CalendarDays size={14} /> {dateLabel(task.deadline)}
+                </span>
+                <div className="card-bottom"><span>{task.bid_count} {task.bid_count === 1 ? 'bid' : 'bids'}</span>
+                  {task.lowest_bid !== null && <strong title="Lowest bid"><ArrowDown size={13} /> {task.lowest_bid} h</strong>}</div>
+              </a>)}
+              {!group.length && <p className="lane-empty">{tasks ? 'No tasks' : 'Loading…'}</p>}
+            </div>
+          </section>;
+        })}
+      </div>
+    </div>
+  </>;
+}
+
+function Modal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => { ref.current?.showModal(); }, []);
+  return <dialog ref={ref} onCancel={(event) => { event.preventDefault(); close(); }} aria-labelledby="dialog-title">
+    <div className="dialog-inner">
+      <header className="dialog-heading">
+        <h2 id="dialog-title">{title}</h2>
+        <button className="icon-button" aria-label="Close dialog" onClick={close} autoFocus><X size={21} /></button>
+      </header>
+      {children}
+    </div>
+  </dialog>;
+}
+
+function CreateTask({ user, close, created }: { user: User; close: () => void; created: (task: Task) => void }) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState('');
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const deadline = new Date(String(data.get('deadline')));
+    if (!Number.isFinite(deadline.getTime())) { setError('Enter a valid deadline.'); return; }
+    setPending(true); setError('');
+    try {
+      created(await send<Task>('/tasks', user.id, {
+        title: data.get('title'), description: data.get('description'),
+        complexity: Number(data.get('complexity')), deadline: deadline.toISOString(),
+      }));
+    } catch (error) { setError((error as Error).message); }
+    finally { setPending(false); }
+  }
+  return <Modal title="New task" close={close}>
+    <form className="create-form" onSubmit={submit}>
+      <label>Title<input name="title" required maxLength={120} placeholder="What needs to be done?" /></label>
+      <label>Description<textarea name="description" required maxLength={3000} rows={4} placeholder="Describe the work and what done looks like." /></label>
+      <div className="form-grid">
+        <label>Complexity<select name="complexity" defaultValue="3">{[1, 2, 3, 4, 5].map((level) => <option key={level}>{level}</option>)}</select></label>
+        <label>Deadline<input type="datetime-local" name="deadline" required /></label>
+      </div>
+      {error && <Alert>{error}</Alert>}
+      <footer className="dialog-actions"><button type="button" className="button secondary" onClick={close}>Cancel</button>
+        <button className="button primary" disabled={pending}>{pending ? 'Creating…' : 'Create draft'}</button></footer>
+    </form>
+  </Modal>;
+}
+
+const transitions = {
+  draft: ['open', 'Open bidding'],
+  open: ['bidding_closed', 'Close bidding'],
+  assigned: ['in_progress', 'Start work'],
+  in_progress: ['review', 'Send to review'],
+  review: ['done', 'Mark done'],
+} as const;
+const bidLabels = { pending: 'Pending', accepted: 'Accepted', not_selected: 'Not selected' };
+
+function TaskDetail({ id, user, workload, revision, refresh, close }: {
+  id: string; user?: User; workload?: Workload; revision: number; refresh: () => void; close: () => void;
+}) {
+  const taskResult = useResource<Task>(`/tasks/${id}`, revision);
+  const bidResult = useResource<Bid[]>(`/tasks/${id}/bids`, revision);
+  const task = taskResult?.data;
+  const [hours, setHours] = useState('');
+  const [pending, setPending] = useState(false);
+  const [message, setMessage] = useState<{ text: string; error?: boolean }>();
+  const isOwner = task?.creator_id === user?.id;
+  const isAssignee = task?.assignee_id === user?.id;
+  const ownBid = bidResult?.data?.some((bid) => bid.bidder_id === user?.id);
+  const transition = task && task.status in transitions ? transitions[task.status as keyof typeof transitions] : undefined;
+  const canAdvance = task && transition && (task.status === 'assigned' || task.status === 'in_progress' ? isAssignee : isOwner);
+  const canAssign = task?.status === 'bidding_closed' && isOwner;
+  const invalidHours = hours !== '' && (!Number.isInteger(Number(hours)) || Number(hours) < 1 || Number(hours) > (workload?.remaining ?? 0));
+
+  async function act(kind: 'bid' | 'assign' | 'advance') {
+    if (!user || !task || pending) return;
+    setPending(true); setMessage(undefined);
+    try {
+      if (kind === 'bid') {
+        await send(`/tasks/${id}/bids`, user.id, { hours: Number(hours) });
+        setHours(''); setMessage({ text: 'Your bid was placed.' });
+      } else {
+        const updated = kind === 'assign'
+          ? await send<Task>(`/tasks/${id}/assign`, user.id)
+          : await send<Task>(`/tasks/${id}/status`, user.id, { status: transition?.[0] }, 'PATCH');
+        setMessage({ text: kind === 'assign' ? `Assigned to ${updated.assignee_name}.` : `Moved to ${statusLabels[updated.status].toLowerCase()}.` });
+      }
+    } catch (error) {
+      setMessage({ error: true, text: error instanceof ApiError && error.code === 'CAPACITY_CHANGED'
+        ? 'Your remaining capacity changed while this task was open. Check your updated hours and try again.'
+        : (error as Error).message });
+    } finally { setPending(false); refresh(); }
+  }
+  return <Modal title={task?.title ?? 'Task details'} close={close}>
+    {taskResult?.error && <Alert>{taskResult.error}</Alert>}
+    {!taskResult && <p className="muted" role="status">Loading task details…</p>}
+    {task && <>
+      <div className="task-meta"><span className="badge"><span className={`state-dot ${task.status}`} />{statusLabels[task.status]}</span>
+        <span className="complexity">Complexity {task.complexity}/5</span></div>
+      <p className="description">{task.description}</p>
+      <dl className="details-list">
+        <div><dt>Created by</dt><dd>{task.creator_name}</dd></div>
+        <div><dt>Deadline</dt><dd>{fullDate.format(new Date(task.deadline))}</dd></div>
+        {task.assignee_name && <div><dt>Assigned to</dt><dd>{task.assignee_name}</dd></div>}
+      </dl>
+      <section className="bid-section" aria-label="Bids">
+        <div className="section-heading"><h3>Bids</h3><span className="muted">Lowest hours first</span></div>
+        {bidResult?.error && <Alert>{bidResult.error}</Alert>}
+        {!bidResult && <p className="muted">Loading bids…</p>}
+        {bidResult?.data?.length === 0 && <p className="empty-bids">No bids yet.</p>}
+        {!!bidResult?.data?.length && <ul className="bid-list">{bidResult.data.map((bid) =>
+          <li key={bid.id}><span className="avatar">{initials(bid.bidder_name)}</span>
+            <span className="bid-name"><strong>{bid.bidder_name}</strong><small>{fullDate.format(new Date(bid.placed_at))}</small></span>
+            <span className={`bid-state ${bid.status}`}>{bidLabels[bid.status]}</span><strong>{bid.hours} h</strong></li>)}</ul>}
+      </section>
+      {task.status === 'open' && user && <section className="bid-form-area">
+        {isOwner && <p className="muted">As the creator, you can close bidding when you’re ready.</p>}
+        {!isOwner && ownBid && <p className="muted">You’ve already bid on this task.</p>}
+        {!isOwner && ownBid === false && workload && <form className="bid-form" onSubmit={(event) => {
+          event.preventDefault(); if (!invalidHours && hours) void act('bid');
+        }}>
+          <label>Hours to complete<input type="number" min="1" max={workload.remaining} step="1" required value={hours}
+            onChange={(event) => setHours(event.target.value)} aria-describedby="bid-capacity" disabled={workload.remaining === 0} /></label>
+          <button className="button primary" disabled={pending || invalidHours || !hours || workload.remaining === 0}><Gavel size={16} /> Place bid</button>
+          <small id="bid-capacity" className={invalidHours ? 'late' : 'muted'}>{workload.remaining} h available. Enter a whole number within your capacity.</small>
+        </form>}
+      </section>}
+      {message && (message.error ? <Alert>{message.text}</Alert> : <p className="notice" role="status">{message.text}</p>)}
+      {(canAdvance || canAssign) && <footer className="dialog-actions">
+        <button className="button primary" disabled={pending} onClick={() => void act(canAssign ? 'assign' : 'advance')}>
+          {canAssign ? 'Auto-assign' : transition?.[1]} <ArrowRight size={16} />
+        </button>
+      </footer>}
+    </>}
+  </Modal>;
+}

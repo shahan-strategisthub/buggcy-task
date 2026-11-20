@@ -1,0 +1,33 @@
+name: taskbid
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: taskbid
+      POSTGRES_USER: taskbid
+      POSTGRES_PASSWORD: ${TASKBID_DB_PASSWORD:-taskbid-local}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U taskbid -d taskbid"]
+      interval: 3s
+      timeout: 3s
+      retries: 15
+    restart: unless-stopped
+  app:
+    build: .
+    environment:
+      DATABASE_URL: postgresql://taskbid:${TASKBID_DB_PASSWORD:-taskbid-local}@db:5432/taskbid
+    ports:
+      - "127.0.0.1:${TASKBID_PORT:-3000}:3000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 10s
+      timeout: 4s
+      retries: 6
+    restart: unless-stopped
+volumes:
+  database:
