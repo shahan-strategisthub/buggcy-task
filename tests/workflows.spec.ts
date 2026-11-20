@@ -2,8 +2,34 @@ import { expect, test } from '@playwright/test';
 import type { Page } from '@playwright/test';
 
 async function switchUser(page: Page, label: string) {
-  await page.getByRole('combobox', { name: 'Switch demo user' }).selectOption({ label });
+  await page.getByRole('combobox', { name: 'Switch demo user' }).click();
+  await page.getByRole('option', { name: label, exact: true }).click();
 }
+
+test('the user switcher supports keyboard selection and remembers the active user', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const switcher = page.getByRole('combobox', { name: 'Switch demo user' });
+  const menu = page.getByRole('listbox', { name: 'Demo users' });
+  await expect(switcher).toContainText('Ava Chen');
+  await switcher.press('Enter');
+  await expect(menu).toBeVisible();
+  await expect(menu.getByRole('option', { name: 'Ava Chen', exact: true })).toBeFocused();
+  await page.keyboard.press('ArrowDown');
+  await expect(menu.getByRole('option', { name: 'Daniel Park', exact: true })).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(menu).toBeHidden();
+  await expect(switcher).toBeFocused();
+  await expect(switcher).toContainText('Ava Chen');
+  await switcher.press('Enter');
+  await expect(menu.getByRole('option', { name: 'Ava Chen', exact: true })).toBeFocused();
+  await page.keyboard.press('m');
+  await expect(menu.getByRole('option', { name: 'Maya Patel', exact: true })).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(switcher).toContainText('Maya Patel');
+  await page.reload();
+  await expect(switcher).toContainText('Maya Patel');
+});
 
 test('create a task, bid in another session, receive a live update and complete the lifecycle', async ({ page, context }) => {
   const title = `Validate export permissions ${Date.now().toString().slice(-6)}`;

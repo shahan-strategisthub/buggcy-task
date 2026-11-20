@@ -1,7 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
+import * as Select from '@radix-ui/react-select';
 import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, ChevronDown, CircleAlert,
-  CircleCheck, FileText, FlaskConical, Gavel, Inbox, LayoutGrid, LockKeyhole, MessageSquare,
+  Check, ChevronUp, CircleCheck, FileText, FlaskConical, Gavel, Inbox, LayoutGrid, LockKeyhole, MessageSquare,
   Plus, Radio, ScanEye, UserRoundCheck, X, Zap } from 'lucide-react';
 import { statuses, statusLabels } from '../shared.js';
 import type { Bid, Status, Task, User, Workload } from '../shared.js';
@@ -75,14 +76,7 @@ export function App() {
           <span className={live ? 'connection live' : 'connection'} title={live ? 'Changes update automatically' : 'Trying to reconnect'}>
             <span className="signal" />{live ? 'Live' : 'Reconnecting'}
           </span>
-          <label className="user-select">
-            <span className="avatar" aria-hidden="true">{user ? initials(user.name) : '–'}</span>
-            <select aria-label="Switch demo user" value={user?.id ?? ''} onChange={(event) => selectUser(Number(event.target.value))} disabled={!user}>
-              {!user && <option value="">Loading teammates…</option>}
-              {users?.data?.map((person) => <option value={person.id} key={person.id}>{person.name}</option>)}
-            </select>
-            <ChevronDown size={13} className="chevron" aria-hidden="true" />
-          </label>
+          <UserSwitcher selected={user} users={users?.data ?? []} onChange={selectUser} />
         </div>
       </div>
     </header>
@@ -98,6 +92,37 @@ export function App() {
       setNewTask(false); refresh(); navigate(`#task/${task.id}`);
     }} />}
   </>;
+}
+
+function UserSwitcher({ selected, users, onChange }: {
+  selected?: User; users: User[]; onChange: (id: number) => void;
+}) {
+  return <Select.Root value={selected ? String(selected.id) : ''} onValueChange={(value) => onChange(Number(value))} disabled={!selected}>
+    <Select.Trigger className="user-trigger" aria-label="Switch demo user">
+      <span className="avatar user-avatar" data-tone={selected && selected.id % 4} aria-hidden="true">
+        {selected ? initials(selected.name) : '–'}
+      </span>
+      <span className="user-trigger-copy">
+        <span className="user-trigger-caption">Demo user</span>
+        <span className="user-trigger-name"><Select.Value placeholder="Loading…">{selected?.name}</Select.Value></span>
+      </span>
+      <Select.Icon asChild><ChevronDown className="user-trigger-arrow" size={15} aria-hidden="true" /></Select.Icon>
+    </Select.Trigger>
+    <Select.Portal>
+      <Select.Content className="user-menu" position="popper" align="end" sideOffset={8} collisionPadding={12} aria-label="Demo users">
+        <div className="user-menu-heading" aria-hidden="true">Switch demo user</div>
+        <Select.ScrollUpButton className="user-menu-scroll"><ChevronUp size={15} /></Select.ScrollUpButton>
+        <Select.Viewport className="user-menu-viewport">
+          {users.map((user) => <Select.Item className="user-option" key={user.id} value={String(user.id)} textValue={user.name}>
+            <span className="avatar user-avatar" data-tone={user.id % 4} aria-hidden="true">{initials(user.name)}</span>
+            <Select.ItemText>{user.name}</Select.ItemText>
+            <Select.ItemIndicator className="user-option-check"><Check size={15} strokeWidth={2.5} aria-hidden="true" /></Select.ItemIndicator>
+          </Select.Item>)}
+        </Select.Viewport>
+        <Select.ScrollDownButton className="user-menu-scroll"><ChevronDown size={15} /></Select.ScrollDownButton>
+      </Select.Content>
+    </Select.Portal>
+  </Select.Root>;
 }
 
 function Board({ revision, workload, user, onCreate }: {
