@@ -1,18 +1,24 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
-import { ArrowDown, ArrowRight, BarChart3, CalendarDays, ChevronDown, CircleAlert, Clock3, FlaskConical,
-  Gavel, LayoutGrid, Plus, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, ChevronDown, CircleAlert,
+  CircleCheck, FileText, FlaskConical, Gavel, Inbox, LayoutGrid, LockKeyhole, MessageSquare,
+  Plus, Radio, ScanEye, UserRoundCheck, X, Zap } from 'lucide-react';
 import { statuses, statusLabels } from '../shared.js';
-import type { Bid, Task, User, Workload } from '../shared.js';
+import type { Bid, Status, Task, User, Workload } from '../shared.js';
 import { ApiError, send, useResource } from './api.js';
 import { Review } from './review.js';
 
 const Dashboard = lazy(() => import('./dashboard.js').then((module) => ({ default: module.Dashboard })));
 const dateFormat = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const fullDate = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
-export function dateLabel(value: string) { return dateFormat.format(new Date(value)); }
+function dateLabel(value: string) { return dateFormat.format(new Date(value)); }
 function initials(name: string) { return name.split(' ').slice(0, 2).map((word) => word[0]).join(''); }
 function navigate(hash: string) { window.location.hash = hash; }
+
+const laneIcons = {
+  draft: FileText, open: Radio, bidding_closed: LockKeyhole, assigned: UserRoundCheck,
+  in_progress: Zap, review: ScanEye, done: CircleCheck,
+} satisfies Record<Status, typeof FileText>;
 
 function Alert({ children }: { children: ReactNode }) {
   return <div className="alert" role="alert"><CircleAlert size={17} /> <span>{children}</span></div>;
@@ -99,10 +105,14 @@ function Board({ revision, workload, user, onCreate }: {
 }) {
   const tasks = useResource<Task[]>('/tasks', revision);
   return <>
-    <div className="page-heading">
+    <div className="page-heading board-heading">
       <div><h1>Task board</h1><p>Post work, compare bids, and track tasks through delivery.</p></div>
       <div className="heading-actions">
-        {workload && <div className="capacity"><Clock3 size={17} /><div><strong>{workload.remaining} h available</strong><small>{workload.workload} of {workload.max_capacity} h allocated</small></div></div>}
+        {workload && <div className="capacity">
+          <strong>{workload.remaining} h available</strong>
+          <progress aria-label="Allocated capacity" max={workload.max_capacity} value={workload.workload} />
+          <small>{workload.workload} of {workload.max_capacity} h allocated</small>
+        </div>}
         <button className="button primary" onClick={onCreate} disabled={!user}><Plus size={18} /> New task</button>
       </div>
     </div>
@@ -111,25 +121,44 @@ function Board({ revision, workload, user, onCreate }: {
       <div className="board">
         {statuses.map((status) => {
           const group = tasks?.data?.filter((task) => task.status === status) ?? [];
-          return <section className="lane" key={status} aria-label={statusLabels[status]}>
-            <header className="lane-heading"><span className={`state-dot ${status}`} /><h2>{statusLabels[status]}</h2><span className="count">{group.length}</span></header>
+          const Icon = laneIcons[status];
+          return <section className={`lane tone-${status}`} key={status} aria-label={statusLabels[status]}>
+            <header className="lane-heading">
+              <span className="lane-icon"><Icon size={15} aria-hidden="true" /></span>
+              <h2>{statusLabels[status]}</h2><span className="count">{group.length}</span>
+            </header>
             <div className="lane-body">
-              {group.map((task) => <a className="task-card" key={task.id} href={`#task/${task.id}`}>
-                <h3>{task.title}</h3>
-                <span className="complexity">Complexity {task.complexity}/5</span>
-                <span className={`deadline ${task.status !== 'done' && Date.parse(task.deadline) < Date.now() ? 'late' : ''}`}>
-                  <CalendarDays size={14} /> {dateLabel(task.deadline)}
-                </span>
-                <div className="card-bottom"><span>{task.bid_count} {task.bid_count === 1 ? 'bid' : 'bids'}</span>
-                  {task.lowest_bid !== null && <strong title="Lowest bid"><ArrowDown size={13} /> {task.lowest_bid} h</strong>}</div>
-              </a>)}
-              {!group.length && <p className="lane-empty">{tasks ? 'No tasks' : 'Loading…'}</p>}
+              {group.map((task) => <TaskCard key={task.id} task={task} />)}
+              {!group.length && <p className="lane-empty"><Inbox size={17} aria-hidden="true" />{tasks ? 'No tasks' : 'Loading…'}</p>}
             </div>
           </section>;
         })}
       </div>
     </div>
   </>;
+}
+
+function TaskCard({ task }: { task: Task }) {
+  const overdue = task.status !== 'done' && Date.parse(task.deadline) < Date.now();
+  return <a className="task-card" href={`#task/${task.id}`}>
+    <div className="card-title"><h3>{task.title}</h3><ArrowUpRight size={15} aria-hidden="true" /></div>
+    <span className="card-complexity">
+      <span className="complexity-meter" aria-hidden="true">
+        {[1, 2, 3, 4, 5].map((level) => <i key={level} className={level <= task.complexity ? 'filled' : undefined} />)}
+      </span>
+      Complexity {task.complexity}/5
+    </span>
+    <time dateTime={task.deadline} className={`deadline${overdue ? ' late' : ''}`}>
+      <CalendarDays size={14} aria-hidden="true" /> <span className="sr-only">{overdue ? 'Overdue, due ' : 'Due '}</span>
+      {dateLabel(task.deadline)}
+    </time>
+    <div className="card-bottom">
+      <span className="card-bids"><MessageSquare size={13} aria-hidden="true" />{task.bid_count} {task.bid_count === 1 ? 'bid' : 'bids'}</span>
+      {task.lowest_bid !== null && <strong className="lowest-bid" title="Lowest bid">
+        <ArrowDown size={12} aria-hidden="true" /><span className="sr-only">Lowest bid </span>{task.lowest_bid} h
+      </strong>}
+    </div>
+  </a>;
 }
 
 function Modal({ title, close, children }: { title: string; close: () => void; children: ReactNode }) {

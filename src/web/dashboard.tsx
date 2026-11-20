@@ -20,11 +20,11 @@ export function Dashboard({ revision }: { revision: number }) {
         <div className="chart" aria-label="Average bid hours by complexity">
           <ResponsiveContainer width="100%" height={235}>
             <BarChart data={stats.average_by_complexity} margin={{ top: 10, left: -25, right: 12, bottom: 0 }}>
-              <CartesianGrid stroke="#e6eaf0" vertical={false} />
+              <CartesianGrid stroke="#ebe8f2" vertical={false} />
               <XAxis dataKey="complexity" tickLine={false} axisLine={false} />
               <YAxis tickLine={false} axisLine={false} allowDecimals={false} />
               <Tooltip formatter={(value) => [`${value} h`, 'Average']} labelFormatter={(value) => `Complexity ${value}`} />
-              <Bar dataKey="average_hours" fill="#14867d" radius={[5, 5, 0, 0]} maxBarSize={48} isAnimationActive={false} />
+              <Bar dataKey="average_hours" fill="var(--accent-chart)" radius={[8, 8, 0, 0]} maxBarSize={52} isAnimationActive={false} />
             </BarChart>
           </ResponsiveContainer>
         </div>
