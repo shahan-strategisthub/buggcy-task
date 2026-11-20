@@ -2,7 +2,7 @@
 
 **Live demo** · [taskbid.srv1848938.hstgr.cloud](https://taskbid.srv1848938.hstgr.cloud)
 
-Use the reviewer credentials shared with the submission. Once inside, the demo user switcher lets you try the creator and bidder roles. The database contains sample tasks in all seven stages.
+Open the demo in your browser and use the demo user switcher to try the creator and bidder roles. The database contains sample tasks in all seven stages.
 
 TaskBid is a small team workspace for posting tasks, collecting estimates, and assigning work to the lowest eligible bidder. It uses React, Node.js with TypeScript, and PostgreSQL with numbered SQL migrations.
 
@@ -63,7 +63,7 @@ Row triggers capture changes in the same transaction as each task or bid write, 
 - Hours are positive integers. Weekly capacity is modeled as a rolling ceiling on outstanding work. It has no calendar reset. Drafts, pending bids, and completed tasks consume zero capacity.
 - Deadlines are delivery deadlines and flag overdue work. The creator explicitly closes bidding, including on overdue tasks. Equal offers are ranked by earliest timestamp and then bid ID.
 - The creator opens and closes bidding, assigns, and marks reviewed work done. The assignee starts work and sends it to review. The demo identity is supplied via `X-User-Id`. Real deployment would use authenticated identities and per-workspace authorization.
-- The deployed demo uses HTTPS and a shared reviewer login. Everyone with these credentials shares the demo workspace, while the user switcher intentionally allows acting as any demo user.
+- The HTTPS demo is directly accessible. Visitors share the seeded workspace and can act as any demo user through the switcher.
 - Live updates use Server-Sent Events because only the server pushes events. One PostgreSQL `LISTEN` connection per process receives commit notifications and invalidates browser snapshots. Clients re-fetch authoritative data when connecting, after changes, and every 30 seconds as a fallback. This avoids a replay store while limiting the effect of missed notifications during a reconnect.
 
 ## API

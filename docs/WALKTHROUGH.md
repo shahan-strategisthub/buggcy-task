@@ -1,6 +1,6 @@
 # Ten-minute TaskBid walkthrough
 
-Open the live board, a second browser tab, the README, and the SQL and assignment files before recording. Sign in before starting so the reviewer password stays out of the recording. Start with a normal browser zoom and a window wide enough to show all seven columns.
+Open the live board, a second browser tab, the README, and the SQL and assignment files before recording. Start with a normal browser zoom and a window wide enough to show all seven columns.
 
 ## 0:00–1:15 · Introduce the workspace
 
