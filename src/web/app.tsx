@@ -3,9 +3,9 @@ import type { FormEvent, ReactNode } from 'react';
 import * as Select from '@radix-ui/react-select';
 import { ArrowDown, ArrowRight, ArrowUpRight, BarChart3, CalendarDays, ChevronDown, CircleAlert,
   Check, ChevronUp, CircleCheck, FileText, FlaskConical, Gavel, Inbox, LayoutGrid, LockKeyhole, MessageSquare,
-  Plus, Radio, ScanEye, UserRoundCheck, X, Zap } from 'lucide-react';
+  Plus, Radio, ScanEye, UserRound, UserRoundCheck, X, Zap } from 'lucide-react';
 import { statuses, statusLabels } from '../shared.js';
-import type { Bid, Status, Task, User, Workload } from '../shared.js';
+import type { Bid, BoardTask, Status, Task, User, Workload } from '../shared.js';
 import { ApiError, send, useResource } from './api.js';
 import { Review } from './review.js';
 
@@ -20,6 +20,13 @@ const laneIcons = {
   draft: FileText, open: Radio, bidding_closed: LockKeyhole, assigned: UserRoundCheck,
   in_progress: Zap, review: ScanEye, done: CircleCheck,
 } satisfies Record<Status, typeof FileText>;
+
+const boardFilters = [
+  { value: 'all', label: 'All tasks', Icon: LayoutGrid },
+  { value: 'created', label: 'Created by me', Icon: FileText },
+  { value: 'bids', label: 'My bids', Icon: Gavel },
+] as const;
+type BoardFilter = typeof boardFilters[number]['value'];
 
 function Alert({ children }: { children: ReactNode }) {
   return <div className="alert" role="alert"><CircleAlert size={17} /> <span>{children}</span></div>;
@@ -128,7 +135,13 @@ function UserSwitcher({ selected, users, onChange }: {
 function Board({ revision, workload, user, onCreate }: {
   revision: number; workload?: Workload; user?: User; onCreate: () => void;
 }) {
-  const tasks = useResource<Task[]>('/tasks', revision);
+  const [filter, setFilter] = useState<BoardFilter>('all');
+  const tasks = useResource<BoardTask[]>(user ? `/tasks?viewer=${user.id}` : null, revision);
+  const visibleTasks = (tasks?.data ?? []).filter((task) => {
+    if (filter === 'created') return task.creator_id === user?.id;
+    if (filter === 'bids') return task.viewer_bid_hours !== null;
+    return true;
+  });
   return <>
     <div className="page-heading board-heading">
       <div><h1>Task board</h1><p>Post work, compare bids, and track tasks through delivery.</p></div>
@@ -142,10 +155,21 @@ function Board({ revision, workload, user, onCreate }: {
       </div>
     </div>
     {tasks?.error && <Alert>{tasks.error}</Alert>}
-    <div className="board-scroll" role="region" aria-label="Task board columns" tabIndex={0}>
+    <div className="board-filters" role="group" aria-label="Filter tasks">
+      {boardFilters.map(({ value, label, Icon }) => <button key={value} type="button"
+        onClick={() => setFilter(value)} aria-pressed={filter === value}>
+        <Icon size={15} aria-hidden="true" />{label}
+      </button>)}
+    </div>
+    {tasks?.data && visibleTasks.length === 0 ? <div className="board-empty">
+      <Inbox size={24} aria-hidden="true" />
+      <p role="status">{filter === 'bids' ? 'You haven’t placed any bids yet.'
+        : filter === 'created' ? 'You haven’t created any tasks yet.' : 'No tasks yet.'}</p>
+      {filter !== 'all' && <button className="button secondary" onClick={() => setFilter('all')}>Show all tasks</button>}
+    </div> : <div className="board-scroll" role="region" aria-label="Task board columns" tabIndex={0}>
       <div className="board">
         {statuses.map((status) => {
-          const group = tasks?.data?.filter((task) => task.status === status) ?? [];
+          const group = visibleTasks.filter((task) => task.status === status);
           const Icon = laneIcons[status];
           return <section className={`lane tone-${status}`} key={status} aria-label={statusLabels[status]}>
             <header className="lane-heading">
@@ -153,20 +177,23 @@ function Board({ revision, workload, user, onCreate }: {
               <h2>{statusLabels[status]}</h2><span className="count">{group.length}</span>
             </header>
             <div className="lane-body">
-              {group.map((task) => <TaskCard key={task.id} task={task} />)}
+              {group.map((task) => <TaskCard key={task.id} task={task} isCreator={task.creator_id === user?.id} />)}
               {!group.length && <p className="lane-empty"><Inbox size={17} aria-hidden="true" />{tasks ? 'No tasks' : 'Loading…'}</p>}
             </div>
           </section>;
         })}
       </div>
-    </div>
+    </div>}
   </>;
 }
 
-function TaskCard({ task }: { task: Task }) {
+function TaskCard({ task, isCreator }: { task: BoardTask; isCreator: boolean }) {
   const overdue = task.status !== 'done' && Date.parse(task.deadline) < Date.now();
   return <a className="task-card" href={`#task/${task.id}`}>
     <div className="card-title"><h3>{task.title}</h3><ArrowUpRight size={15} aria-hidden="true" /></div>
+    <span className={`card-creator${isCreator ? ' self' : ''}`} title={task.creator_name}>
+      <UserRound size={13} aria-hidden="true" /><span>{isCreator ? 'Created by you' : `By ${task.creator_name}`}</span>
+    </span>
     <span className="card-complexity">
       <span className="complexity-meter" aria-hidden="true">
         {[1, 2, 3, 4, 5].map((level) => <i key={level} className={level <= task.complexity ? 'filled' : undefined} />)}
@@ -177,6 +204,9 @@ function TaskCard({ task }: { task: Task }) {
       <CalendarDays size={14} aria-hidden="true" /> <span className="sr-only">{overdue ? 'Overdue, due ' : 'Due '}</span>
       {dateLabel(task.deadline)}
     </time>
+    {task.viewer_bid_hours !== null && <span className="card-your-bid">
+      <Gavel size={12} aria-hidden="true" /> Your bid · {task.viewer_bid_hours} h
+    </span>}
     <div className="card-bottom">
       <span className="card-bids"><MessageSquare size={13} aria-hidden="true" />{task.bid_count} {task.bid_count === 1 ? 'bid' : 'bids'}</span>
       {task.lowest_bid !== null && <strong className="lowest-bid" title="Lowest bid">

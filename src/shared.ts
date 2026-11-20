@@ -21,6 +21,9 @@ export interface Task {
   bid_count: number;
   lowest_bid: number | null;
 }
+export interface BoardTask extends Task {
+  viewer_bid_hours: number | null;
+}
 export interface Bid {
   id: number;
   bidder_id: number;

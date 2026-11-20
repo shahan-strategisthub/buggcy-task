@@ -31,6 +31,26 @@ test('the user switcher supports keyboard selection and remembers the active use
   await expect(switcher).toContainText('Maya Patel');
 });
 
+test('board labels and filters show the selected user’s relationship to a task', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  const card = page.getByRole('link', { name: /Improve search filters/ });
+  const filter = page.getByRole('group', { name: 'Filter tasks' });
+  await expect(card).toContainText('Created by you');
+  await expect(card).not.toContainText('Your bid');
+  await filter.getByRole('button', { name: 'Created by me' }).click();
+  await expect(card).toBeVisible();
+  await switchUser(page, 'Daniel Park');
+  await expect(card).toBeHidden();
+  await filter.getByRole('button', { name: 'My bids' }).click();
+  await expect(card).toContainText('By Ava Chen');
+  await expect(card).toContainText('Your bid · 8 h');
+  await expect(page.getByRole('link', { name: /Define the export format/ })).toBeHidden();
+  await filter.getByRole('button', { name: 'All tasks' }).click();
+  await expect(page.getByRole('link', { name: /Define the export format/ })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(390);
+});
+
 test('create a task, bid in another session, receive a live update and complete the lifecycle', async ({ page, context }) => {
   const title = `Validate export permissions ${Date.now().toString().slice(-6)}`;
   await page.goto('/');

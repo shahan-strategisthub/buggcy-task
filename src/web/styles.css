@@ -148,6 +148,46 @@ h1 { font-size: clamp(29px, 3.6vw, 42px); font-weight: 800; letter-spacing: -.06
 .board-heading .button:focus-visible { outline-color: #d2b8ff; }
 .secondary { background: #fff; border-color: var(--border); color: var(--ink); }
 .secondary:hover { background: #f7f4fb; }
+.board-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  width: fit-content;
+  margin-bottom: 13px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.board-filters button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 750;
+  white-space: nowrap;
+}
+.board-filters button:hover { background: #f7f4fb; color: var(--ink); }
+.board-filters button[aria-pressed="true"] { background: var(--accent-soft); color: var(--primary-strong); }
+.board-empty {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 34px 18px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--surface);
+  color: var(--muted);
+  text-align: center;
+  font-size: 14px;
+}
+.board-empty svg { color: var(--primary); }
 .board-scroll { overflow-x: auto; padding: 3px 2px 15px; scrollbar-color: #c8bce1 transparent; }
 .board { display: grid; grid-template-columns: repeat(7, minmax(163px, 1fr)); gap: 12px; }
 .lane {
@@ -185,6 +225,10 @@ h1 { font-size: clamp(29px, 3.6vw, 42px); font-weight: 800; letter-spacing: -.06
 .card-title h3 { font-size: 13px; font-weight: 800; line-height: 1.38; overflow-wrap: anywhere; }
 .card-title svg { color: var(--subtle); margin-top: 1px; }
 .task-card:hover .card-title svg, .task-card:focus-visible .card-title svg { color: var(--lane-color); }
+.card-creator { display: flex; align-items: center; gap: 5px; min-width: 0; margin-top: -4px; color: var(--muted); font-size: 11px; font-weight: 700; }
+.card-creator > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.card-creator.self { color: var(--primary-strong); font-weight: 800; }
+.card-your-bid { display: flex; align-items: center; justify-self: start; gap: 5px; border-radius: 6px; padding: 4px 6px; background: #eaf0ff; color: #344f9e; font-size: 10px; font-weight: 800; }
 .card-complexity { display: flex; align-items: center; gap: 5px; color: var(--muted); font-size: 10px; font-weight: 750; white-space: nowrap; }
 .complexity-meter { display: inline-flex; align-items: flex-end; gap: 2px; }
 .complexity-meter i { display: block; width: 3px; height: 4px; border-radius: 2px; background: #e8e2f1; }
@@ -274,6 +318,7 @@ dialog::backdrop { background: #241c3983; backdrop-filter: blur(2px); }
   .page-heading { flex-direction: column; align-items: flex-start; gap: 15px; margin-bottom: 17px; }
   .board-heading { padding: 17px 15px; border-radius: 16px; }
   .board-heading .heading-actions { justify-content: space-between; gap: 9px; width: 100%; }
+  .board-filters button { min-height: 38px; padding-inline: 8px; }
   .capacity { min-width: 136px; }
   .board-scroll { scroll-snap-type: x proximity; scroll-padding-inline: 2px; }
   .board { grid-template-columns: repeat(7, minmax(174px, 1fr)); }

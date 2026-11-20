@@ -6,7 +6,7 @@ import type { Pool, PoolClient } from 'pg';
 import { pool, setActor, transaction } from './db/database.js';
 import { createScenario } from './demo.js';
 import { statusLabels, statuses } from './shared.js';
-import type { Bid, Stats, Task, User, Workload } from './shared.js';
+import type { Bid, BoardTask, Stats, Task, User, Workload } from './shared.js';
 
 class HttpError extends Error {
   constructor(public status: number, public code: string, message: string) { super(message); }
@@ -35,10 +35,11 @@ function requireOwner(task: Task, user: User) {
   if (task.creator_id !== user.id) throw new HttpError(403, 'CREATOR_REQUIRED', 'Only the task creator can take this action.');
 }
 
-const taskQuery = `
-  SELECT t.id, t.title, t.description, t.complexity, t.status, t.deadline, t.creator_id,
+const taskColumns = `
+         t.id, t.title, t.description, t.complexity, t.status, t.deadline, t.creator_id,
          creator.name AS creator_name, assigned.id AS assignee_id, assigned.name AS assignee_name,
-         totals.bid_count, totals.lowest_bid
+         totals.bid_count, totals.lowest_bid`;
+const taskRelations = `
   FROM tasks t
   JOIN users creator ON creator.id = t.creator_id
   LEFT JOIN bids winner ON winner.id = t.winning_bid_id
@@ -46,6 +47,7 @@ const taskQuery = `
   CROSS JOIN LATERAL (
     SELECT count(*)::int AS bid_count, min(hours) AS lowest_bid FROM bids WHERE task_id = t.id
   ) totals`;
+const taskQuery = `SELECT ${taskColumns} ${taskRelations}`;
 
 async function getTask(db: Pool | PoolClient, value: number, lock = false): Promise<Task> {
   if (lock) await db.query('SELECT id FROM tasks WHERE id = $1 FOR UPDATE', [value]);
@@ -86,8 +88,13 @@ api.get('/users', async (_req, res) => {
   res.json(result.rows);
 });
 api.get('/users/:id/workload', async (req, res) => { res.json(await getWorkload(id(req.params.id, 'user ID'))); });
-api.get('/tasks', async (_req, res) => {
-  const result = await pool.query<Task>(`${taskQuery} ORDER BY t.created_at DESC, t.id DESC`);
+api.get('/tasks', async (req, res) => {
+  const viewerId = req.query.viewer === undefined ? null : id(req.query.viewer, 'viewer ID');
+  const result = await pool.query<BoardTask>(`
+    SELECT ${taskColumns}, viewer_bid.hours AS viewer_bid_hours
+    ${taskRelations}
+    LEFT JOIN bids viewer_bid ON viewer_bid.task_id = t.id AND viewer_bid.bidder_id = $1
+    ORDER BY t.created_at DESC, t.id DESC`, [viewerId]);
   res.json(result.rows);
 });
 api.get('/tasks/:id', async (req, res) => { res.json(await getTask(pool, taskId(req))); });

@@ -8,7 +8,7 @@ Show the board and switch between Ava and Daniel. Describe the workflow from pos
 
 ## 1:15–3:00 · Place a bid live
 
-As Ava, create a task or open a seeded draft. Open bidding and copy its URL. In the second tab, switch to Daniel and open the task URL. Enter more hours than Daniel has available to show the disabled submit button, then enter a valid amount. Return to Ava’s tab and show the bid listed without a reload. Explain that the database publishes after commit and the browser re-fetches the canonical bid list.
+As Ava, create a task or open a seeded draft. Open bidding and copy its URL. In the second tab, switch to Daniel and open the task URL. Enter more hours than Daniel has available to show the disabled submit button, then enter a valid amount. Return to Ava’s tab and show the bid listed without a reload. Explain that the database publishes after commit and the browser re-fetches the bid list. Close the task in each tab to show **Created by you** on Ava’s card and **Your bid** on Daniel’s card. Use **Created by me** or **My bids** to focus the board on the current role.
 
 ## 3:00–4:55 · Explain the schema
 

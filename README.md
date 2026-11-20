@@ -29,6 +29,8 @@ For a native Node.js setup, use Node.js 20.19+ and an empty PostgreSQL database.
 
 The Review lab creates a fresh set of tasks and bidders per run so different reviewers can repeat the scenarios independently.
 
+Use **Created by me** and **My bids** to focus the board on the selected demo user. Each card shows who created it and the selected user’s bid when they have one.
+
 ## Schema and database constraints
 
 - `users` stores hourly rate, weekly capacity, and a workload counter for the hours committed to active assignments. The counter is bounded by a check constraint. The task transition trigger increments it at assignment and releases those hours at completion in the same transaction as the status change.
@@ -70,7 +72,7 @@ Row triggers capture changes in the same transaction as each task or bid write, 
 
 The REST endpoints also accept the `/api` prefix used by the frontend. Write requests identify the actor using `X-User-Id`.
 
-- `GET /tasks`, `GET /tasks/:id`, `POST /tasks`
+- `GET /tasks` (optional `?viewer=<id>` for the selected user's bid), `GET /tasks/:id`, `POST /tasks`
 - `PATCH /tasks/:id/status` with `{"status":"open"}` (or the applicable next stage)
 - `GET /tasks/:id/bids`, `POST /tasks/:id/bids` with `{"hours":5}`
 - `POST /tasks/:id/assign`
